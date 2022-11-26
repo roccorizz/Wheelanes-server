@@ -49,8 +49,8 @@ async function run() {
             console.log({ token })
         })
         //get 6 featured cars
-        app.get('/featuredcars', async (req, res) => {
-            const query = {};
+        app.get('/cars', async (req, res) => {
+            const query = { isFeatured };
             const limit = 6;
             const cursor = featuredCarsCollection.find(query).limit(limit);
             const cars = await cursor.toArray();
