@@ -34,7 +34,23 @@ function verifyJWT(req, res, next) {
 async function run() {
     try {
         const carCollection = client.db('Wheelanes').collection('cars');
-        // const usersCollection = client.db('Wheelanes').collection('users');
+        const categoryCollection = client.db('Wheelanes').collection('carCategories');
+        const bookingCollection = client.db('Wheelanes').collection('bookings');
+        const buyersCollection = client.db('Wheelanes').collection('buyers');
+        const sellerCollection = client.db('Wheelanes').collection('sellers');
+        const adminCollection = client.db('Wheelanes').collection('admin');
+
+        const verifyAdmin = async (req, res, next) => {
+            const decodedEmail = req.decoded.email;
+            const query = { email: decodedEmail };
+            const user = await adminCollection.findOne(query);
+            if (user?.role !== 'admin') {
+                return res.status(403).send({ message: 'forbidden access' })
+            }
+            next();
+        }
+
+
         //jwt
 
         app.post('/jwt', (req, res) => {
@@ -62,66 +78,69 @@ async function run() {
         })
 
 
-        // //get cars by category
-        // app.get('/cars-bodytype', async (req, res) => {
-        //     const query = {
-        //         [
-        //         { $group: { bodyType: "$bodyType" } }
-        //         ]};
-        //     const cursor = carCollection.aggregate(query);
-
-        //     const cars = await cursor.toArray();
-        //     res.send(cars);
-        // })
-
-        app.get('/cars/:id', async (req, res) => {
-            const id = req.params.id;
-            const query = { _id: ObjectId(id) };
-            const cars = await carCollection.findOne(query);
-
+        app.get('/allcars', async (req, res) => {
+            const query = {};
+            const cursor = carCollection.find(query);
+            const cars = await cursor.toArray();
             res.send(cars);
             console.log(cars)
         })
-        // //add new featured car
-        // app.post('/services', async (req, res) => {
-        //     const car = req.body;
-        //     const result = await featuredCarsCollection.insertOne(car);
-        //     res.send(result);
-        // })
-        // //add new car
-        // app.post('/cars', async (req, res) => {
-        //     const car = req.body;
-        //     const result = await carCollection.insertOne(car);
-        //     res.send(result);
-        // })
-        // //get all featured cars
-        // app.get('/all-featuredcars', async (req, res) => {
-        //     const query = {};
-        //     const cursor = featuredCarsCollection.find(query);
-        //     const cars = await cursor.toArray();
-        //     res.send(cars);
-        // })
-        // //get all cars
-        // app.get('/all-cars', async (req, res) => {
-        //     const query = {};
-        //     const cursor = carCollection.find(query);
-        //     const cars = await cursor.toArray();
-        //     res.send(cars);
-        // })
-        // //get single featured car
-        // app.get('/featuredcar/:id', async (req, res) => {
-        //     const id = req.params.id;
-        //     const query = { _id: ObjectId(id) };
-        //     const result = await featuredCarsCollection.findOne(query);
-        //     res.send(result);
-        // })
-        // //get single featured car
-        // app.get('/car/:id', async (req, res) => {
-        //     const id = req.params.id;
-        //     const query = { _id: ObjectId(id) };
-        //     const result = await carCollection.findOne(query);
-        //     res.send(result);
-        // })
+
+        //get cars by category
+
+        app.get('/car-categories', async (req, res) => {
+            const query = {};
+            const cursor = categoryCollection.find(query);
+            const cars = await cursor.toArray();
+            res.send(cars);
+
+        })
+
+        app.get('/allcars/byCategory/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { category_id: parseInt(id) };
+            const cars = carCollection.find(query);
+            const cursor = await cars.toArray()
+            res.send(cursor);
+        })
+
+
+        app.get('/buyers', async (req, res) => {
+            const query = {};
+            const users = await buyersCollection.find(query).toArray();
+            res.send(users);
+        })
+        app.get('/sellers', async (req, res) => {
+            const query = {};
+            const users = await sellerCollection.find(query).toArray();
+            res.send(users);
+        })
+        app.get('/admin/:email', async (req, res) => {
+            const email = req.params.email;
+            const query = { email }
+            const user = await adminCollection.findOne(query);
+            res.send({ isAdmin: user?.role === 'admin' });
+        })
+
+        app.post('/sellers', async (req, res) => {
+            const seller = req.body;
+            console.log(user);
+            const result = await sellerCollection.insertOne(seller);
+            res.send(result);
+        });
+        app.put('/admin/:id', verifyJWT, verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: ObjectId(id) }
+            const options = { upsert: true };
+            const updatedDoc = {
+                $set: {
+                    role: 'admin'
+
+                }
+            }
+            const result = await adminCollection.updateOne(filter, updatedDoc, options);
+            res.send(result);
+        });
 
         // //********* User Section *********** */
 
