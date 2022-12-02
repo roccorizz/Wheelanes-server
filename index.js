@@ -14,15 +14,17 @@ app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.mwzl4ri.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
+
+
 function verifyJWT(req, res, next) {
     const authHeader = req.headers.authorization;
-
     if (!authHeader) {
         return res.status(401).send({ message: 'unauthorized access' });
     }
     const token = authHeader.split(' ')[1];
 
     jwt.verify(token, process.env.ACCESS_TOKEN, function (err, decoded) {
+        console.log(err)
         if (err) {
             return res.status(403).send({ message: 'Forbidden access' });
         }
@@ -46,15 +48,7 @@ async function run() {
             }
             next();
         }
-        const verifySeller = async (req, res, next) => {
-            const decodedEmail = req.decoded.email;
-            const query = { email: decodedEmail };
-            const user = await usersCollection.findOne(query);
-            if (user?.role !== 'seller') {
-                return res.status(403).send({ message: 'forbidden access' })
-            }
-            next();
-        }
+
 
 
         //jwt
@@ -89,26 +83,41 @@ async function run() {
         })
 
 
-        app.get('/allcars', async (req, res) => {
-            const query = {};
+        app.get('/allcars', verifyJWT, async (req, res) => {
+            const query = { seller: req.decoded.email };
             const cursor = carCollection.find(query);
             const cars = await cursor.toArray();
             res.send(cars);
         })
+
+        app.put('/allcars/:id', verifyJWT, async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: ObjectId(id) };
+            const options = { upsert: true };
+            const updatedDoc = {
+                $set: {
+                    isFeatured: true
+
+                }
+            }
+            const result = await carCollection.updateOne(filter, updatedDoc, options);
+            res.send(result);
+        })
+
         app.delete('/allcars/:id', verifyJWT, async (req, res) => {
             const id = req.params.id;
             const filter = { _id: ObjectId(id) };
             const result = await carCollection.deleteOne(filter);
             res.send(result);
         })
-        app.get('/allcars', verifyJWT, async (req, res) => {
+        app.get('/allcars/:id', verifyJWT, async (req, res) => {
             const id = req.params.id;
             const query = { category_id: parseInt(id) };
             const cars = carCollection.find(query);
             const cursor = await cars.toArray()
             res.send(cursor);
         })
-        app.post('/allcars', verifyJWT, verifySeller, async (req, res) => {
+        app.post('/allcars', async (req, res) => {
             const car = req.body;
             const result = await carCollection.insertOne(car);
             res.send(result);
@@ -125,7 +134,7 @@ async function run() {
 
         app.get('/allcars/byCategory/:id', async (req, res) => {
             const id = req.params.id;
-            const query = { category_id: parseInt(id) };
+            const query = { carCategory: id };
             const cars = carCollection.find(query);
             const cursor = await cars.toArray()
             res.send(cursor);
@@ -196,12 +205,8 @@ async function run() {
         });
 
         app.get('/bookings', verifyJWT, async (req, res) => {
-            const email = req.query.email;
             const decodedEmail = req.decoded.email;
-            if (email !== decodedEmail) {
-                return res.send(403).send({ message: 'forbidden access' })
-            }
-            const query = { email: email };
+            const query = { email: decodedEmail };
             const bookings = await bookingCollection.find(query).toArray();
             res.send(bookings);
         })
@@ -214,19 +219,25 @@ async function run() {
 
         app.post('/bookings', async (req, res) => {
             const booking = req.body
-            console.log(booking);
+            const carId = req.body.car_id
             const query = {
-                appointmentDate: booking.appointmentDate,
+
                 email: booking.email,
-                treatment: booking.treatment
+
             }
-            const alreadyBooked = await bookingCollection.find(query).toArray();
-            if (alreadyBooked.length) {
-                const message = `You already have a booking on ${booking.appointmentDate}`
-                return res.send({ acknowledged: false, message })
-            }
-            const result = await bookingCollection.insertOne(booking);
-            res.send(result);
+            await bookingCollection.insertOne(booking);
+
+            const id = { _id: ObjectId(carId) }
+
+            const updated = await carCollection.updateOne(id, {
+                $set: {
+                    isFeatured: false,
+                    status: 'Sold'
+
+                }
+            })
+
+            res.send(updated);
         });
 
     }
